@@ -1,29 +1,56 @@
 'use strict';
-const {app, Menu, Tray, BrowserWindow} = require('electron')
+const {app, Menu, Tray, BrowserWindow, nativeImage, dialog} = require('electron')
 const command = require('shelljs/global')
 const jquery = require('jquery')
 const fs = require('fs')
 const path = require('path')
 const openLink = require('electron').shell
 
-const trayActive = 'assets/logo/trayIcon.png'
-const trayWait = 'assets/logo/trayIconWait.png'
+function getIcon(path_icon) {
+    return nativeImage.createFromPath(path_icon).resize({width: 16})
+}
+
+const trayActive = getIcon(path.join(__dirname,'assets/logo/trayIcon.png'));
+const trayWait = getIcon(path.join(__dirname,'assets/logo/trayIconWait.png'));
+const icon = path.join(__dirname,'/assets/logo/windowIcon.png');
+
+if(process.platform === 'darwin') {
+    app.dock.hide();
+}
 
 let tray = null
 let aboutUs = null
 
-app.on('ready', () => 
+app.on('ready', () =>
 {
-	tray = new Tray(path.join(__dirname, trayActive))
+	tray = new Tray(trayActive)
 	aboutUs = new BrowserWindow({
 		width : 400,
 		height : 600,
 		resizable : false,
 		fullscreen : false,
 		title : 'About | Vagrant Manager',
-		icon : __dirname+'/assets/logo/windowIcon.png',
+		icon : icon,
 		show : false,
 	})
+
+    aboutUs.on('close', function (e)
+    {
+        e.preventDefault()
+        aboutUs.hide()
+        if(process.platform === 'darwin') {
+            app.dock.hide();
+        }
+        aboutUs.removeAllListeners('close')
+    })
+
+    aboutUs.on('show', function ()
+    {
+        if(process.platform === 'darwin') {
+            app.dock.show();
+        }
+    })
+
 	aboutUs.setMenu(null)
 	aboutUs.loadURL('file:\/\/'+__dirname+'/about.html')
 	// aboutUs.webContents.openDevTools()
@@ -33,19 +60,23 @@ app.on('ready', () =>
   		openLink.openExternal(url)
 	})
 
-	function boxDetails(callback) 
+	function boxDetails(callback)
 	{
 		var getFile = exec('cd ~ && pwd', {silent:true,async:true})
-		getFile.stdout.on('data', function(data) 
+		getFile.stdout.on('data', function(data)
 		{
 			var box = []
-			fs.readFile(data.trim()+'/.vagrant.d/data/machine-index/index', 'utf8', function (err, data) 
+			fs.readFile(data.trim()+'/.vagrant.d/data/machine-index/index', 'utf8', function (err, data)
 			{
 				if (err) throw err
 				var jsonData = JSON.parse(data)
 				for(var index in jsonData.machines) {
-
+                    var short_path = jsonData.machines[index]['vagrantfile_path'];
+                    short_path = short_path.split('/').reverse().filter((v, i) => {
+                        return i < 2;
+                    }).reverse().join('/');
 					box.push({
+					    'short_path': short_path,
 						'path' 		: jsonData.machines[index]['vagrantfile_path'],
 						'state' 	: jsonData.machines[index]['state'],
 						'name' 		: jsonData.machines[index]['extra_data']['box']['name'],
@@ -58,11 +89,11 @@ app.on('ready', () =>
 		})
 	}
 
-	var vagrantManager = function(event) 
+	var vagrantManager = function(event)
 	{
-		tray.setImage(path.join(__dirname, trayActive))
-		
-		boxDetails( function(box) 
+		tray.setImage(trayActive)
+
+		boxDetails( function(box)
 		{
 			var menu = [
 			{
@@ -75,81 +106,78 @@ app.on('ready', () =>
 			{
 				type: "separator"
 			}]
-			
+
 			for(var index in box) {
 				menu.push(
-				{	
-					label: box[index]['name'],
-					icon: __dirname+"/assets/logo/"+box[index]['state']+".png",
+				{
+					label: box[index]['short_path'],
+                    icon: getIcon(path.join(__dirname,"/assets/logo/"+box[index]['state']+".png")),
 					submenu: [
 					{
-						label: "Vagrant Up",
-						submenu: [
+						label: "Up",
+						sublabel: index,
+						id: box[index]['path'],
+						click: function(menuItem)
 						{
-							label: "Up",
-							sublabel: index,
-							id: box[index]['path'],
-							click: function(menuItem) 
-							{
-								runShell(contextMenu, menuItem, "vagrant up")
-							}
-						}]
+							runShell(contextMenu, menuItem, "vagrant up")
+						}
 					},
 					{
-						label: "Vagrant Suspend",
-						submenu: [
+						label: "Suspend",
+						sublabel: index,
+						id: box[index]['path'],
+						click: function(menuItem)
 						{
-							label: "Suspend",
-							sublabel: index,
-							id: box[index]['path'],
-							click: function(menuItem) 
-							{
-								runShell(contextMenu, menuItem, "vagrant suspend")
-							}
-						}]
+							runShell(contextMenu, menuItem, "vagrant suspend")
+						}
 					},
 					{
-						label: "Vagrant Resume",
-						submenu: [
+						label: "Resume",
+						sublabel: index,
+						id: box[index]['path'],
+						click: function(menuItem)
 						{
-							label: "Resume",
-							sublabel: index,
-							id: box[index]['path'],
-							click: function(menuItem) 
-							{
-								runShell(contextMenu, menuItem, "vagrant resume")
-							}
-						}]
+							runShell(contextMenu, menuItem, "vagrant resume")
+						}
 					},
 					{
-						label: "Vagrant Halt",
-						submenu: [
-						{
-							label: "Halt",
-							sublabel: index,
-							id: box[index]['path'],
-							click: function(menuItem) 
-							{
-								runShell(contextMenu, menuItem, "vagrant halt")								
-							}
-						}]
+                        label: "Halt",
+                        sublabel: index,
+                        id: box[index]['path'],
+                        click: function(menuItem)
+                        {
+                            runShell(contextMenu, menuItem, "vagrant halt")
+                        }
 					},
 					{
-						label: "Vagrant Destroy",
-						submenu: [
-						{
-							label: "Destroy",
-							sublabel: index,
-							id: box[index]['path'],
-							click: function(menuItem) 
-							{
-								runShell(contextMenu, menuItem, "vagrant destroy")
-							}
-						}]
+                        label: "Destroy",
+                        sublabel: index,
+                        id: box[index]['path'],
+                        click: function(menuItem)
+                        {
+                            function getDialog() {
+                                dialog.showMessageBox({
+                                    type: 'warning',
+                                    buttons: ['Yes', 'No'],
+                                    message: 'Are you sure to destroy this vagrant instance?',
+                                    cancelId: 1,
+                                    defaultId: 1
+                                }, function(response) {
+                                    if(response === 0) {
+                                        runShell(contextMenu, menuItem, "vagrant destroy -f")
+                                    }
+                                });
+                            }
+                            getDialog();
+                        }
 					},
 					{
 						type: "separator"
 					},
+                    {
+                        label : "Box: "+box[index]['name'],
+                        enabled: false
+                    },
 					{
 						label : "Provider: "+box[index]['provider'],
 						enabled: false
@@ -167,23 +195,16 @@ app.on('ready', () =>
 			},
 			{
 				label: 'About',
-				click: function (menuItem) 
+				click: function (menuItem)
 				{
-					aboutUs.show()
-
-					aboutUs.on('close', function (e) 
-					{
-						e.preventDefault()
-						aboutUs.hide() 
-						aboutUs.removeAllListeners('close')
-					})
+					aboutUs.show();
 				}
 			},
 			{
 				label: "Quit",
 				role: 'quit'
 			})
-			
+
 			var contextMenu = Menu.buildFromTemplate(menu)
 			tray.setToolTip('Vagrant Manager')
 	  		tray.setContextMenu(contextMenu)
@@ -192,13 +213,12 @@ app.on('ready', () =>
 
 	let runShell = function(contextMenu, menuItem, command)
 	{
-		tray.setImage(path.join(__dirname, trayWait))
+		tray.setImage(trayWait)
 		contextMenu.items[0].enabled = false
 		var parentID = +menuItem.sublabel + 2
 		contextMenu.items[parentID].enabled = false
 		tray.setContextMenu(contextMenu)
-		
-		let shellCommand = new exec('cd ' + menuItem.id + ' && '+ command, function(code, stdout, stderr)
+        let shellCommand = new exec('cd ' + menuItem.id + ' && '+ command, function(code, stdout, stderr)
 		{
 			console.log('Exit code:', code)
 			console.log('Program output:', stdout)

@@ -2,9 +2,12 @@
 const {app, Menu, Tray, BrowserWindow, nativeImage, dialog} = require('electron')
 const command = require('shelljs/global')
 const jquery = require('jquery')
+const shellPath = require('shell-path');
 const fs = require('fs')
 const path = require('path')
 const openLink = require('electron').shell
+
+process.env.PATH = shellPath.sync();
 
 function getIcon(path_icon) {
     return nativeImage.createFromPath(path_icon).resize({width: 16})
@@ -20,6 +23,18 @@ if(process.platform === 'darwin') {
 
 let tray = null
 let aboutUs = null
+
+const shouldQuit = app.makeSingleInstance(() => {
+	dialog.showMessageBox({
+        buttons: ['Ok'],
+        message: 'Already running'
+    })
+	return true
+})
+
+if (shouldQuit) {
+    app.quit()
+}
 
 app.on('ready', () =>
 {
@@ -202,7 +217,12 @@ app.on('ready', () =>
 			},
 			{
 				label: "Quit",
-				role: 'quit'
+                click: function (menuItem)
+                {
+                    tray.destroy();
+                    aboutUs.destroy();
+                    app.quit();
+                }
 			})
 
 			var contextMenu = Menu.buildFromTemplate(menu)
@@ -220,7 +240,16 @@ app.on('ready', () =>
 		tray.setContextMenu(contextMenu)
         let shellCommand = new exec('cd ' + menuItem.id + ' && '+ command, function(code, stdout, stderr)
 		{
-			console.log('Exit code:', code)
+			if(code > 0) {
+                dialog.showMessageBox({
+                	type: 'error',
+                    buttons: ['Ok'],
+                    message: 'Code ' + code,
+                    detail : stderr
+                });
+			}
+
+            console.log('Exit code:', code)
 			console.log('Program output:', stdout)
 			console.log('Program stderr:', stderr)
 

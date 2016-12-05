@@ -62,31 +62,31 @@ app.on('ready', () =>
 
 	function boxDetails(callback)
 	{
-		var getFile = exec('cd ~ && pwd', {silent:true,async:true})
-		getFile.stdout.on('data', function(data)
-		{
-			var box = []
-			fs.readFile(data.trim()+'/.vagrant.d/data/machine-index/index', 'utf8', function (err, data)
-			{
-				if (err) throw err
-				var jsonData = JSON.parse(data)
-				for(var index in jsonData.machines) {
-                    var short_path = jsonData.machines[index]['vagrantfile_path'];
-                    short_path = short_path.split('/').reverse().filter((v, i) => {
-                        return i < 2;
-                    }).reverse().join('/');
-					box.push({
-					    'short_path': short_path,
-						'path' 		: jsonData.machines[index]['vagrantfile_path'],
-						'state' 	: jsonData.machines[index]['state'],
-						'name' 		: jsonData.machines[index]['extra_data']['box']['name'],
-						'provider'	: jsonData.machines[index]['extra_data']['box']['provider'],
-					})
-				}
+        function getUserHome() {
+            return process.env[(process.platform == 'win32') ? 'USERPROFILE' : 'HOME'];
+        }
 
-				return callback(box)
-			})
-		})
+		var box = []
+		fs.readFile(getUserHome()+'/.vagrant.d/data/machine-index/index', 'utf8', function (err, data)
+		{
+			if (err) throw err
+			var jsonData = JSON.parse(data)
+			for(var index in jsonData.machines) {
+				var short_path = jsonData.machines[index]['vagrantfile_path'];
+				short_path = short_path.split('/').reverse().filter((v, i) => {
+					return i < 2;
+				}).reverse().join('/');
+				box.push({
+					'short_path': short_path,
+					'path' 		: jsonData.machines[index]['vagrantfile_path'],
+					'state' 	: jsonData.machines[index]['state'],
+					'name' 		: jsonData.machines[index]['extra_data']['box']['name'],
+					'provider'	: jsonData.machines[index]['extra_data']['box']['provider'],
+				})
+			}
+
+			return callback(box)
+		});
 	}
 
 	var vagrantManager = function(event)
@@ -115,7 +115,7 @@ app.on('ready', () =>
 					submenu: [
 					{
 						label: "Up",
-						sublabel: index,
+						box: index,
 						id: box[index]['path'],
 						click: function(menuItem)
 						{
@@ -124,7 +124,7 @@ app.on('ready', () =>
 					},
 					{
 						label: "Suspend",
-						sublabel: index,
+						box: index,
 						id: box[index]['path'],
 						click: function(menuItem)
 						{
@@ -133,7 +133,7 @@ app.on('ready', () =>
 					},
 					{
 						label: "Resume",
-						sublabel: index,
+						box: index,
 						id: box[index]['path'],
 						click: function(menuItem)
 						{
@@ -142,7 +142,7 @@ app.on('ready', () =>
 					},
 					{
                         label: "Halt",
-                        sublabel: index,
+                        box: index,
                         id: box[index]['path'],
                         click: function(menuItem)
                         {
@@ -151,7 +151,7 @@ app.on('ready', () =>
 					},
 					{
                         label: "Destroy",
-                        sublabel: index,
+                        box: index,
                         id: box[index]['path'],
                         click: function(menuItem)
                         {
@@ -215,7 +215,7 @@ app.on('ready', () =>
 	{
 		tray.setImage(trayWait)
 		contextMenu.items[0].enabled = false
-		var parentID = +menuItem.sublabel + 2
+		var parentID = +menuItem.box + 2
 		contextMenu.items[parentID].enabled = false
 		tray.setContextMenu(contextMenu)
         let shellCommand = new exec('cd ' + menuItem.id + ' && '+ command, function(code, stdout, stderr)
